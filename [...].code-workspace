@@ -1,0 +1,21 @@
+{
+	"folders": [
+		{
+			"name": "...-CanSat",
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.autoSave": "afterDelay",
+		"files.autoSaveDelay": 100
+	},
+	"extensions": {
+		"recommendations": [
+			"platformio.platformio-ide",
+			"usernamehw.errorlens",
+			"aaron-bond.better-comments",
+			"ms-vsliveshare.vsliveshare",
+			"eamodio.gitlens"
+		]
+	}
+}
