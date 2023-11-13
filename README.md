@@ -1,7 +1,7 @@
-# [---]
+# Asterius
 
 ## Who are we?
-We are **[---]**, a robotics team comprised of students from the Model High School of **[Evangeliki Scholi Smyrna](http://lyk-evsch-n-smyrn.att.sch.gr/wordpress/)** taking part in the **[CanSat in Greece](https://cansat.gr)** competition for the 7th time consecutively.
+We are **Asterius**, a robotics team comprised of students from the Model High School of **[Evangeliki Scholi Smyrna](http://lyk-evsch-n-smyrn.att.sch.gr/wordpress/)** taking part in the **[CanSat in Greece](https://cansat.gr)** competition for the 7th time consecutively.
 
 ## What is this?
 This is a repository which will contain the **code** for the CanSat itself, used amongst team members to collaborate with greater ease; it can also be used as a means to track the programming progress and edit on any device when needed.
