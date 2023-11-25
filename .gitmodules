@@ -1,0 +1,18 @@
+[submodule "lib/Adafruit_BME680"]
+	path = lib/Adafruit_BME680
+	url = https://github.com/adafruit/Adafruit_BME680
+[submodule "lib/Adafruit_BNO08x"]
+	path = lib/Adafruit_BNO08x
+	url = https://github.com/adafruit/Adafruit_BNO08x
+[submodule "lib/Adafruit_GPS"]
+	path = lib/Adafruit_GPS
+	url = https://github.com/adafruit/Adafruit_GPS
+[submodule "lib/Adafruit_BusIO"]
+	path = lib/Adafruit_BusIO
+	url = https://github.com/adafruit/Adafruit_BusIO
+[submodule "lib/Adafruit_Sensor"]
+	path = lib/Adafruit_Sensor
+	url = https://github.com/adafruit/Adafruit_Sensor
+[submodule "lib/RadioHead"]
+	path = lib/RadioHead
+	url = https://github.com/PaulStoffregen/RadioHead
