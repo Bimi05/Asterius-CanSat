@@ -16,3 +16,6 @@
 [submodule "lib/RadioHead"]
 	path = lib/RadioHead
 	url = https://github.com/PaulStoffregen/RadioHead
+[submodule "lib/SD"]
+	path = lib/SD
+	url = https://github.com/arduino-libraries/SD
