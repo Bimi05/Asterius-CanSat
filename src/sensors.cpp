@@ -137,10 +137,20 @@ void GPS_read() {
   }
 }
 
+void BNO_read() {
+  // TODO: work in progress :)
+  if (BNO085.getSensorEvent(&BNO_val)) {
+    if (BNO_val.sensorId == SH2_GEOMAGNETIC_ROTATION_VECTOR) {
+      return;
+    }
+  }
+}
+
 // ---------------------------- //
 void updateSensorData(uint32_t ID) {
   BME_read();
   GPS_read();
+  // BNO_read();
 
   float time = static_cast<float>((millis()-boot) / 1000); //? can be slightly "inaccurate"
   len = snprintf(data, 255, "Asterius:%li %.01f | %.02f %.02f %.02f %.02f %.02f", ID, time, temperature, pressure, humidity, lat, lon);
