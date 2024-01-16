@@ -8,7 +8,7 @@
 	"settings": {
 		"files.autoSave": "afterDelay",
 		"files.autoSaveDelay": 100,
-		"editor.tabSize": 4
+		"editor.tabSize": 2
 	},
 	"extensions": {
 		"recommendations": [
