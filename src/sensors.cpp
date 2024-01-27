@@ -113,7 +113,7 @@ void BME_read() {
   if (BME688.performReading()) {
     temperature = BME688.temperature;
     pressure = BME688.pressure;
-    humidity = BME688.humidity;
+    humidity = BME688.humidity / 100.0F;
   }
   yield();
 }
