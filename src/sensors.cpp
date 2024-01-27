@@ -1,8 +1,6 @@
 #include "sensors.h"
 #include "misc.h"
 
-#define BME_I2C_ADDR 0
-#define BNO_I2C_ADDR 0
 #define SD_SPI_ADDR 0
 
 #define RFM_CHIP_SELECT 0
@@ -39,7 +37,7 @@ float lon = static_cast<float>(NAN);
 
 // ------ Initialisation ------ //
 bool BME_init() {
-  if (!BME688.begin(BME_I2C_ADDR)) {
+  if (!BME688.begin()) {
     Debug("Unable to initialise the BME688 sensor.");
     return false;
   }
@@ -47,7 +45,7 @@ bool BME_init() {
 }
 
 bool BNO_init() {
-  if (!BNO085.begin_I2C(BNO_I2C_ADDR)) {
+  if (!BNO085.begin_I2C()) {
     Debug("Unable to initialise the BNO085 sensor.");
     return false;
   }
@@ -100,7 +98,7 @@ bool SD_init() {
 }
 // ---------------------------- //
 bool initialiseSensors() {
-  if (!(BME_init() && BNO_init() && RFM_init() && GPS_init() && SD_init())) {
+  if (!(BME_init() && BNO_init() && GPS_init() && SD_init() && RFM_init())) {
     return false;
   }
 
@@ -115,7 +113,7 @@ void BME_read() {
   if (BME688.performReading()) {
     temperature = BME688.temperature;
     pressure = BME688.pressure;
-    humidity = BME688.humidity;
+    humidity = BME688.humidity / 100.0F;
   }
   yield();
 }
@@ -154,6 +152,7 @@ void updateSensorData(uint32_t ID) {
 
   float time = static_cast<float>((millis()-boot) / 1000); //? can be slightly "inaccurate"
   len = snprintf(data, 255, "Asterius:%li %.01f | %.02f %.02f %.02f %.02f %.02f", ID, time, temperature, pressure, humidity, lat, lon);
+  Debug(data);
 }
 
 bool saveData() {
