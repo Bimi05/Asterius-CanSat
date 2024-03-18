@@ -1,23 +1,24 @@
 #include "sensors.h"
 #include "misc.h"
 
-#define SD_SPI_ADDR 0
+#define SD_SPI_ADDR 5
 
-#define RFM_CHIP_SELECT 0
-#define RFM_INTERRUPT 0
-#define RFM_RESET 0
-#define RFM_FREQUENCY 0.0
+#define RFM_CHIP_SELECT 23
+#define RFM_INTERRUPT 22
+#define RFM_RESET 21
+#define RFM_FREQUENCY 0.0F
 
 
 Adafruit_BME680 BME688 = Adafruit_BME680();
 Adafruit_BNO08x BNO085 = Adafruit_BNO08x();
 Adafruit_GPS GPS = Adafruit_GPS(&Serial1);
 RH_RF95 RFM = RH_RF95(RFM_CHIP_SELECT, RFM_INTERRUPT);
-File DataFile;
+File df;
 
 
 // ----------- Data ----------- //
 char data[255];
+float gpres = 0.0F; //* for altitude calculation
 uint8_t len = 0;
 uint32_t boot;
 sh2_SensorValue_t BNO_val;
@@ -41,6 +42,12 @@ bool BME_init() {
     Debug("Unable to initialise the BME688 sensor.");
     return false;
   }
+
+  for (uint8_t i=0; i<10; i++) {
+    gpres += BME688.readPressure() / 100.0F;
+  }
+  gpres /= 10;
+
   return true;
 }
 
@@ -91,8 +98,8 @@ bool SD_init() {
     SD.remove("ASTERIUS_DATA.txt");
   }
 
-  DataFile = SD.open("ASTERIUS_DATA.txt");
-  DataFile.seek(0); //! this might cause an issue (if it doesn't overwrite ALL the content, i.e. in a Ctrl+C)
+  df = SD.open("ASTERIUS_DATA.txt");
+  df.seek(0); //! this might cause an issue (if it doesn't overwrite ALL the content, i.e. in a Ctrl+C)
 
   return true;
 }
@@ -119,14 +126,22 @@ void BME_read() {
 }
 
 void GPS_read() {
-  uint32_t GPS_timeout = millis();
+  if (!GPS.fix) {
+    return; //* just don't bother...
+  }
 
-  while (!GPS.newNMEAreceived()) {
-    GPS.read();
-    if (millis()-GPS_timeout >= 500) { // TODO: implement a FUNCTIONAL time-out system :)
-      break;
+  // TODO: implement a FUNCTIONAL time-out system :)
+  // uint32_t GPS_timeout = millis();
+
+  for (uint8_t i=0; i<3; i++) {
+    do {
+      GPS.read();
+      yield();
+      // if (millis()-GPS_timeout >= 500) {
+      //   break;
+      // }
     }
-    yield();
+    while (!GPS.newNMEAreceived());
   }
 
   if (GPS.parse(GPS.lastNMEA())) {
@@ -134,36 +149,66 @@ void GPS_read() {
     lon = (GPS.lon == 'W') ? -(GPS.longitude) : GPS.longitude;
   }
 }
-
 // ---------------------------- //
+
+// ----- Helper Functions ----- //
 void updateSensorData(uint32_t ID) {
   BME_read();
   GPS_read();
 
-  float time = static_cast<float>((millis()-boot) / 1000); //? can be slightly "inaccurate"
-  len = snprintf(data, 255, "Asterius:%li %.01f | %.02f %.02f %.02f %.02f %.02f", ID, time, temperature, pressure, humidity, lat, lon);
+  float time = static_cast<float>((millis()-boot) / 1000.0F); //? can be slightly "inaccurate"
+  len = snprintf(data, 255, "Asterius:%li %.01f | %.02f %.02f %.02f %.02f %.02f | [M]", ID, time, temperature, pressure, humidity, lat, lon);
   Debug(data);
 }
 
 bool saveData() {
   //? somebody riddle me why the fuck I thought this was a necessary idea
 
-  if (!DataFile) {
+  if (!df) {
     return false;
   }
 
-  DataFile.println(data);
-  DataFile.flush();
+  df.println(data);
+  df.flush();
 
   return true;
 }
 
-bool sendData() {
+bool sendData(uint8_t offset) {
   //! NOTE: For minions, we will be calling a recv() with a timeout of ~300-500ms
   //! if everything is received according to plan, compile and send
   //! else send what we currently have (possibly report missing data?)
 
-  // TODO: encrypt "data" here and then send them over to the ground station :)
-  return RFM.send((uint8_t*) data, len);
+  uint8_t counter = 1;
+  char* message = (char*) malloc(sizeof(data));
+
+  for (uint8_t i=0; i < strlen(data); i++) {
+    if (isspace(data[i])) {
+      message[i] = ' ';
+      continue;
+    }
+
+    if ((int(data[i]) < 65 || int(data[i]) > 90) || (int(data[i]) < 97 || int(data[i]) > 122)) {
+      continue; //* basically: only decrypt letters pls
+    }
+
+    uint8_t s = offset;
+    if (counter % 2 == 0) {
+      s = (26-offset);
+    }
+
+    uint8_t value = 97; //* for lowercase letters
+    if (isupper(data[i])) {
+      value = 65;
+    }
+
+    //? I really hope no one asks me to explain this, cause it's... yes
+    message[i] = char(int(data[i] + s - value)%26 + value);
+    counter++;
+  }
+
+  bool sent = RFM.send((uint8_t*) message, len);
+  free(message);
+  return sent;
 }
 // ---------------------------- //
