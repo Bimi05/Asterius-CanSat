@@ -14,4 +14,4 @@ bool initialiseSensors();
 void updateSensorData(uint32_t ID);
 
 bool saveData();
-bool sendData();
+bool sendData(uint8_t offset);
