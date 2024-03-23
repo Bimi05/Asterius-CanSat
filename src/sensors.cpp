@@ -135,8 +135,24 @@ void GPS_read() {
   while (true) {
     GPS.read();
     if (GPS.newNMEAreceived() && GPS.parse(GPS.lastNMEA())) {
-      lat = (GPS.lat == 'S') ? -(GPS.latitude) : GPS.latitude;
-      lon = (GPS.lon == 'W') ? -(GPS.longitude) : GPS.longitude;
+      //* this just processes our coordinates
+      //* so that we can enter them on google maps
+      //* and get an accurate result of our position
+
+      GPS.latitude /= 100.0F;
+      float lat_deg = floor(GPS.latitude);
+      float lat_mins = ((GPS.latitude-lat_deg)*100)/60;
+      lat_deg += lat_mins;
+
+      GPS.longitude /= 100.0F;
+      float lon_deg = floor(GPS.longitude);
+      float lon_mins = ((GPS.longitude-lon_deg)*100)/60;
+      lon_deg += lon_mins;
+
+
+      lat = (GPS.lat == 'S') ? -(lat_deg) : lat_deg;
+      lon = (GPS.lon == 'W') ? -(lon_deg) : lon_deg;
+
       break;
     }
     yield();
@@ -150,7 +166,7 @@ void updateSensorData(uint32_t ID) {
   GPS_read();
 
   float time = static_cast<float>((millis()-boot) / 1000.0F); //? can be slightly "inaccurate"
-  len = snprintf(data, 255, "Asterius:%li %.01f | %.02f %.02f %.02f %.02f %.02f | [M]", ID, time, temperature, pressure, humidity, lat, lon);
+  len = snprintf(data, 255, "Asterius:%li %.01f | %.02f %.02f %.02f %.08f %.08f | [M]", ID, time, temperature, pressure, humidity, lat, lon);
   Debug(data);
 }
 
