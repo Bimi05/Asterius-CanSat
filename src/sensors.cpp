@@ -9,10 +9,10 @@
 #define RFM_FREQUENCY 0.0F
 
 
-Adafruit_BME680 BME688 = Adafruit_BME680();
-Adafruit_BNO08x BNO085 = Adafruit_BNO08x();
-Adafruit_GPS GPS = Adafruit_GPS(&Serial1);
-RH_RF95 RFM = RH_RF95(RFM_CHIP_SELECT, RFM_INTERRUPT);
+Adafruit_BME680 BME688;
+Adafruit_BNO08x BNO085;
+Adafruit_GPS GPS(&Serial1);
+RH_RF95 RFM(RFM_CHIP_SELECT, RFM_INTERRUPT);
 File df;
 
 
@@ -82,7 +82,7 @@ bool GPS_init() {
     return false;
   }
 
-  GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
+  GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCONLY);
   GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
 
   return true;
@@ -122,31 +122,24 @@ void BME_read() {
     pressure = BME688.pressure / 100.0F;
     humidity = BME688.humidity;
   }
-  yield();
 }
 
 void GPS_read() {
-  if (!GPS.fix) {
-    return; //* just don't bother...
-  }
-
   // TODO: implement a FUNCTIONAL time-out system :)
   // uint32_t GPS_timeout = millis();
+  // if (millis()-GPS_timeout >= 500) {
+  //   break;
+  // }
 
-  for (uint8_t i=0; i<3; i++) {
-    do {
-      GPS.read();
-      yield();
-      // if (millis()-GPS_timeout >= 500) {
-      //   break;
-      // }
+  //! people will say this is dangerous, but I'm taking the risk
+  while (true) {
+    GPS.read();
+    if (GPS.newNMEAreceived() && GPS.parse(GPS.lastNMEA())) {
+      lat = (GPS.lat == 'S') ? -(GPS.latitude) : GPS.latitude;
+      lon = (GPS.lon == 'W') ? -(GPS.longitude) : GPS.longitude;
+      break;
     }
-    while (!GPS.newNMEAreceived());
-  }
-
-  if (GPS.parse(GPS.lastNMEA())) {
-    lat = (GPS.lat == 'S') ? -(GPS.latitude) : GPS.latitude;
-    lon = (GPS.lon == 'W') ? -(GPS.longitude) : GPS.longitude;
+    yield();
   }
 }
 // ---------------------------- //
