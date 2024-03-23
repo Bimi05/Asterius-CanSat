@@ -119,8 +119,8 @@ bool initialiseSensors() {
 void BME_read() {
   if (BME688.performReading()) {
     temperature = BME688.temperature;
-    pressure = BME688.pressure;
-    humidity = BME688.humidity / 100.0F;
+    pressure = BME688.pressure / 100.0F;
+    humidity = BME688.humidity;
   }
   yield();
 }
