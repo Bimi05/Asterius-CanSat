@@ -4,10 +4,8 @@
 #include "sensors.h"
 
 void setup() {
-  while (!Serial) {
-    Serial.begin(9600);
-    delay(100);
-  }
+  Serial.begin(115200);
+  while (!Serial); //* comment out when serial isn't needed
 
   if (!initialiseSensors()) {
     Serial.println("Something went wrong with the initialisation. Check wirings and addresses.");
