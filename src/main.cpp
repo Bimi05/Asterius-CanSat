@@ -3,7 +3,7 @@
 
 #include "sensors.h"
 
-#define BUZZER 0
+#define BUZZER 4
 
 void setup() {
   Serial.begin(115200);
