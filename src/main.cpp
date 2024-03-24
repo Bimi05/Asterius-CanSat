@@ -3,9 +3,10 @@
 
 #include "sensors.h"
 
+#define BUZZER 0
+
 void setup() {
   Serial.begin(115200);
-  while (!Serial); //* comment out when serial isn't needed
 
   if (!initialiseSensors()) {
     Serial.println("Something went wrong with the initialisation. Check wirings and addresses.");
@@ -29,6 +30,14 @@ void loop() {
 
   saveData();
   sendData(1);
+
+  if (findPhase() == 4) {
+    static uint32_t lastBeat = millis();
+    if (millis() - lastBeat >= 2000) {
+      lastBeat = millis();
+      tone(BUZZER, 3000, 500);
+    }
+  }
 
   p_id++;
 }

@@ -17,11 +17,16 @@ File df;
 
 
 // ----------- Data ----------- //
-char data[255];
-float gpres = 0.0F; //* for altitude calculation
-uint8_t len = 0;
 uint32_t boot;
+
+char data[255];
+uint8_t len = 0;
 sh2_SensorValue_t BNO_val;
+
+uint8_t phase = 0;
+bool landed = false;
+float lv = static_cast<float>(NAN);
+float gpres = 0.0F; //* for altitude calculation
 
 
 //? for easy copy (shift + alt + down/up arrow)
@@ -219,5 +224,32 @@ bool sendData(uint8_t offset) {
   bool sent = RFM.send((uint8_t*) message, len);
   free(message);
   return sent;
+}
+
+uint8_t findPhase() {
+  if (isnan(lv)) {
+    lv = BME688.readAltitude(gpres);
+    return 1;
+  }
+
+  if (landed) {
+    return 4;
+  }
+
+  float cv = BME688.readAltitude(gpres);
+  float diff = cv - lv;
+  lv = cv;
+
+  //? should be more than enough for when it's immobile
+  if ((diff > -1) && (diff < 1)) {
+    if (phase == 3) {
+      landed = true;
+      return 4;
+    }
+    return 1;
+  }
+
+  phase = (diff > 0) ? 2 : 3;
+  return phase;
 }
 // ---------------------------- //
