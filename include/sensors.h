@@ -10,6 +10,8 @@
 bool initialiseSensors();
 void updateSensorData(uint32_t ID);
 
+bool connect();
+
 bool saveData();
 bool sendData(uint8_t offset);
 

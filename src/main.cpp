@@ -12,6 +12,29 @@ void setup() {
     Serial.println("Something went wrong with the initialisation. Check wirings and addresses.");
     return;
   }
+
+  Serial.println("Sensors initialised. Beginning slave pairing...");
+
+  uint32_t start = millis();
+  uint8_t cons = 0;
+
+  while (true) {
+    //* realistically, connecting is just telling us that Master and Slave(s) can communicate
+    if (connect()) {
+      cons++;
+      Serial.println("Slave found! Connection established.");
+    }
+
+    if (millis()-start >= 5*60*1000) { //* 5 minutes should be plenty
+      break;
+    }
+  }
+
+  if (cons == 0) {
+    Serial.println("No connections have been made. Please ensure the Master and the Slaves are functional.");
+    return;
+  }
+
   Serial.println("Ready!");
 }
 

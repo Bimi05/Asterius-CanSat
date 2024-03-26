@@ -17,7 +17,7 @@ File df;
 
 
 // ----------- Data ----------- //
-uint32_t boot;
+uint32_t bootTime;
 
 char data[255];
 uint8_t len = 0;
@@ -62,8 +62,8 @@ bool BNO_init() {
     return false;
   }
 
-  //* configure as necessary (this still needs stuff)
   BNO085.enableReport(SH2_MAGNETIC_FIELD_CALIBRATED);
+  BNO085.enableReport(SH2_GRAVITY);
   BNO085.enableReport(SH2_GEOMAGNETIC_ROTATION_VECTOR);
 
   return true;
@@ -76,8 +76,6 @@ bool RFM_init() {
   }
 
   RFM.setFrequency(RFM_FREQUENCY);
-  RFM.setTxPower(20);
-
   return true;
 }
 
@@ -114,7 +112,7 @@ bool initialiseSensors() {
     return false;
   }
 
-  boot = millis();
+  bootTime = millis();
   return true;
 }
 // ---------------------------- //
@@ -124,18 +122,12 @@ bool initialiseSensors() {
 void BME_read() {
   if (BME688.performReading()) {
     temperature = BME688.temperature;
-    pressure = BME688.pressure / 100.0F;
+    pressure = BME688.pressure / 100.0F; //* hPa
     humidity = BME688.humidity;
   }
 }
 
 void GPS_read() {
-  // TODO: implement a FUNCTIONAL time-out system :)
-  // uint32_t GPS_timeout = millis();
-  // if (millis()-GPS_timeout >= 500) {
-  //   break;
-  // }
-
   //! people will say this is dangerous, but I'm taking the risk
   while (true) {
     GPS.read();
@@ -163,35 +155,13 @@ void GPS_read() {
     yield();
   }
 }
+
 // ---------------------------- //
 
 // ----- Helper Functions ----- //
-void updateSensorData(uint32_t ID) {
-  BME_read();
-  GPS_read();
-
-  float time = static_cast<float>((millis()-boot) / 1000.0F); //? can be slightly "inaccurate"
-  len = snprintf(data, 255, "Asterius:%li %.01f | %.02f %.02f %.02f %.08f %.08f | [M]", ID, time, temperature, pressure, humidity, lat, lon);
-  Debug(data);
-}
-
-bool saveData() {
-  //? somebody riddle me why the fuck I thought this was a necessary idea
-
-  if (!df) {
-    return false;
-  }
-
-  df.println(data);
-  df.flush();
-
-  return true;
-}
-
-bool sendData(uint8_t offset) {
-  //! NOTE: For minions, we will be calling a recv() with a timeout of ~300-500ms
-  //! if everything is received according to plan, compile and send
-  //! else send what we currently have (possibly report missing data?)
+char* process(uint8_t mode, char* data, uint8_t offset) {
+  //* modes: 1 - encrypt / 2 - decrypt
+  uint8_t mod = (mode == 1) ? 0 : 1;
 
   uint8_t counter = 1;
   char* message = (char*) malloc(sizeof(data));
@@ -202,12 +172,12 @@ bool sendData(uint8_t offset) {
       continue;
     }
 
-    if ((int(data[i]) < 65 || int(data[i]) > 90) || (int(data[i]) < 97 || int(data[i]) > 122)) {
-      continue; //* basically: only decrypt letters pls
+    if (((int) data[i] < 65 || (int) data[i] > 90) || ((int) data[i] < 97 || (int) data[i] > 122)) {
+      continue; //* too much; didn't understand: only process letters
     }
 
     uint8_t s = offset;
-    if (counter % 2 == 0) {
+    if (counter % 2 == mod) {
       s = (26-offset);
     }
 
@@ -217,14 +187,85 @@ bool sendData(uint8_t offset) {
     }
 
     //? I really hope no one asks me to explain this, cause it's... yes
-    message[i] = char(int(data[i] + s - value)%26 + value);
+    message[i] = (char)((int)(data[i] + s - value) % 26 + value);
     counter++;
   }
 
-  bool sent = RFM.send((uint8_t*) message, len);
-  free(message);
+  //! NOTE: remember to free the memory!
+  //! this returns a char pointer for temporary use.
+  return message;
+}
+
+void updateSensorData(uint32_t ID) {
+  memset(data, '-', 255);
+
+  BME_read();
+  GPS_read();
+
+  float time = static_cast<float>((millis()-bootTime) / 1000.0F);
+  len = snprintf(data, 255, "Asterius:%li %.01f %.02f %.02f %.02f %.06f %.06f [M]", ID, time, temperature, pressure, humidity, lat, lon);
+
+  Debug(data);
+}
+
+bool connect() {
+  uint8_t buffer[255];
+  uint8_t len = sizeof(buffer);
+
+  if (!RFM.recv(buffer, &len)) {
+    return false;
+  }
+
+  char* info = process(2, (char*) buffer, 1);
+  if (strstr(info, "[S->M]") == NULL) {
+    return false; //* got a message, wasn't ours :(
+  }
+
+  char resp[] = "Asterius:Pairing Success. Start transmitting data. [M->S]";
+  uint8_t* resp_en = (uint8_t*) process(1, resp, 1);
+  bool sent = RFM.send(resp_en, sizeof(resp_en));
+
+  free(info);
+  free(resp_en);
+
   return sent;
 }
+
+bool saveData() {
+  if (!df) {
+    return false;
+  }
+
+  df.println(data);
+  df.flush();
+  return true;
+}
+
+bool sendData(uint8_t offset) {
+  uint8_t S_packet[255];
+  uint8_t SP_len = sizeof(S_packet);
+
+  if (RFM.recv(S_packet, &SP_len)) {
+    char* m = process(2, (char*) S_packet, offset);
+    if (strstr(m, "[S->M]") != NULL) {
+      char* buffer = (char*) malloc(strlen(m-3));
+      memcpy(buffer, m, strlen(m-3));
+      buffer[strlen(buffer-1)] = ']';
+      char* packet = process(1, buffer, offset);
+      free(buffer);
+      RFM.send((uint8_t*) packet, sizeof(packet));
+      free(packet);
+    }
+    free(m);
+  }
+
+  char* message = process(1, data, offset);
+  bool sent = RFM.send((uint8_t*) message, len);
+  free(message);
+
+  return sent;
+}
+
 
 uint8_t findPhase() {
   if (isnan(lv)) {
