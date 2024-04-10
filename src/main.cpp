@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <InternalTemperature.h>
+#include <TeensyThreads.h>
 
 #include "sensors.h"
 
@@ -41,15 +42,15 @@ void setup() {
 uint32_t p_id = 1;
 void loop() {
   updateSensorData(p_id);
+  listenForOrders();
 
-  //? this wasn't my idea okay...
   float temp = InternalTemperature.readTemperatureC();
   Serial.print("[Debug] Teensy's internal temperature: ");
   Serial.print(temp, 1);
   Serial.println("°C");
 
-  //* NOTE: saveData() will save ONLY the main body's data to its SD card.
-  //* sendData() on the other hand, will send every piece of data (main & minion(s)).
+  //! NOTE: saveData() will save ONLY the Master's data to the SD card.
+  //! sendData() on the other hand, will send both the Master's AND the Slaves' data.
 
   saveData();
   sendData(1);
