@@ -2,22 +2,25 @@
 #include "misc.h"
 
 #define SD_SPI_ADDR 5
+#define SERVO_PIN 0
 
 #define RFM_CHIP_SELECT 23
 #define RFM_INTERRUPT 22
 #define RFM_RESET 21
-#define RFM_FREQUENCY 0.0F
+#define RFM_FREQUENCY 434.2F
 
 
 Adafruit_BME680 BME688;
 Adafruit_BNO08x BNO085;
 Adafruit_GPS GPS(&Serial1);
 RH_RF95 RFM(RFM_CHIP_SELECT, RFM_INTERRUPT);
+Servo Motor;
 File df;
 
 
 // ----------- Data ----------- //
 uint32_t bootTime;
+bool detached;
 
 char data[255];
 uint8_t len = 0;
@@ -33,11 +36,26 @@ float gpres = 0.0F; //* for altitude calculation
 //? please don't hate on me I'm lazy
 
 // float x = static_cast<float>(NAN);
-float temperature = static_cast<float>(NAN);
-float pressure = static_cast<float>(NAN);
-float humidity = static_cast<float>(NAN);
+float temp = static_cast<float>(NAN);
+float pres = static_cast<float>(NAN);
+float hum = static_cast<float>(NAN);
 float lat = static_cast<float>(NAN);
 float lon = static_cast<float>(NAN);
+
+
+float mx = static_cast<float>(NAN);
+float my = static_cast<float>(NAN);
+float mz = static_cast<float>(NAN);
+
+float gx = static_cast<float>(NAN);
+float gy = static_cast<float>(NAN);
+float gz = static_cast<float>(NAN);
+
+float grr = static_cast<float>(NAN);
+float gri = static_cast<float>(NAN);
+float grj = static_cast<float>(NAN);
+float grk = static_cast<float>(NAN);
+
 // ---------------------------- //
 
 
@@ -106,9 +124,11 @@ bool SD_init() {
 
   return true;
 }
+
 // ---------------------------- //
 bool initialiseSensors() {
-  if (!(BME_init() && BNO_init() && GPS_init() && SD_init() && RFM_init())) {
+  Motor.attach(SERVO_PIN);
+  if (!(BME_init() && BNO_init() && GPS_init() && SD_init() && RFM_init() && Motor.attached())) {
     return false;
   }
 
@@ -121,9 +141,9 @@ bool initialiseSensors() {
 // -------- Operations -------- //
 void BME_read() {
   if (BME688.performReading()) {
-    temperature = BME688.temperature;
-    pressure = BME688.pressure / 100.0F; //* hPa
-    humidity = BME688.humidity;
+    temp = BME688.temperature;
+    pres = BME688.pressure / 100.0F; //* hPa
+    hum = BME688.humidity;
   }
 }
 
@@ -132,52 +152,64 @@ void GPS_read() {
   while (true) {
     GPS.read();
     if (GPS.newNMEAreceived() && GPS.parse(GPS.lastNMEA())) {
-      //* this just processes our coordinates
-      //* so that we can enter them on google maps
-      //* and get an accurate result of our position
-
-      GPS.latitude /= 100.0F;
-      float lat_deg = floor(GPS.latitude);
-      float lat_mins = ((GPS.latitude-lat_deg)*100)/60;
-      lat_deg += lat_mins;
-
-      GPS.longitude /= 100.0F;
-      float lon_deg = floor(GPS.longitude);
-      float lon_mins = ((GPS.longitude-lon_deg)*100)/60;
-      lon_deg += lon_mins;
-
-
-      lat = (GPS.lat == 'S') ? -(lat_deg) : lat_deg;
-      lon = (GPS.lon == 'W') ? -(lon_deg) : lon_deg;
-
       break;
     }
     yield();
   }
+
+  //* this just processes our coordinates
+  //* so that we can enter them on google maps
+  //* and get an accurate result of our position
+
+  GPS.latitude /= 100.0F;
+  float lat_deg = floor(GPS.latitude);
+  float lat_mins = ((GPS.latitude-lat_deg)*100)/60;
+  lat_deg += lat_mins;
+
+  GPS.longitude /= 100.0F;
+  float lon_deg = floor(GPS.longitude);
+  float lon_mins = ((GPS.longitude-lon_deg)*100)/60;
+  lon_deg += lon_mins;
+
+
+  lat = (GPS.lat == 'S') ? -(lat_deg) : lat_deg;
+  lon = (GPS.lon == 'W') ? -(lon_deg) : lon_deg;
 }
 
+void BNO_read() {
+  if (BNO085.getSensorEvent(&BNO_val)) {
+    switch (BNO_val.sensorId) {
+      case SH2_MAGNETIC_FIELD_CALIBRATED:
+        mx = BNO_val.un.magneticField.x;
+        my = BNO_val.un.magneticField.y;
+        mz = BNO_val.un.magneticField.z;
+      case SH2_GRAVITY:
+        gx = BNO_val.un.gravity.x;
+        gy = BNO_val.un.gravity.y;
+        gz = BNO_val.un.gravity.z;
+      case SH2_GEOMAGNETIC_ROTATION_VECTOR:
+        grr = BNO_val.un.geoMagRotationVector.real;
+        gri = BNO_val.un.geoMagRotationVector.i;
+        grj = BNO_val.un.geoMagRotationVector.j;
+        grk = BNO_val.un.geoMagRotationVector.k;
+    }
+  }
+}
 // ---------------------------- //
 
 // ----- Helper Functions ----- //
 char* process(uint8_t mode, char* data, uint8_t offset) {
   //* modes: 1 - encrypt / 2 - decrypt
   uint8_t mod = (mode == 1) ? 0 : 1;
-
-  uint8_t counter = 1;
-  char* message = (char*) malloc(sizeof(data));
+  uint8_t c = 1;
 
   for (uint8_t i=0; i < strlen(data); i++) {
-    if (isspace(data[i])) {
-      message[i] = ' ';
-      continue;
-    }
-
-    if (((int) data[i] < 65 || (int) data[i] > 90) || ((int) data[i] < 97 || (int) data[i] > 122)) {
+    if (isspace(data[i]) || ((data[i] < 65 || data[i] > 90) && (data[i] < 97 || data[i] > 122))) {
       continue; //* too much; didn't understand: only process letters
     }
 
     uint8_t s = offset;
-    if (counter % 2 == mod) {
+    if (c % 2 == mod) {
       s = (26-offset);
     }
 
@@ -187,83 +219,12 @@ char* process(uint8_t mode, char* data, uint8_t offset) {
     }
 
     //? I really hope no one asks me to explain this, cause it's... yes
-    message[i] = (char)((int)(data[i] + s - value) % 26 + value);
-    counter++;
+    data[i] = (char)((int)(data[i] + s - value) % 26 + value);
+    c++;
   }
 
-  //! NOTE: remember to free the memory!
-  //! this returns a char pointer for temporary use.
-  return message;
-}
-
-void updateSensorData(uint32_t ID) {
-  memset(data, '-', 255);
-
-  BME_read();
-  GPS_read();
-
-  float time = static_cast<float>((millis()-bootTime) / 1000.0F);
-  len = snprintf(data, 255, "Asterius:%li %.01f %.02f %.02f %.02f %.06f %.06f [M]", ID, time, temperature, pressure, humidity, lat, lon);
-
-  Debug(data);
-}
-
-bool connect() {
-  uint8_t buffer[255];
-  uint8_t len = sizeof(buffer);
-
-  if (!RFM.recv(buffer, &len)) {
-    return false;
-  }
-
-  char* info = process(2, (char*) buffer, 1);
-  if (strstr(info, "[S->M]") == NULL) {
-    return false; //* got a message, wasn't ours :(
-  }
-
-  char resp[] = "Asterius:Pairing Success. Start transmitting data. [M->S]";
-  uint8_t* resp_en = (uint8_t*) process(1, resp, 1);
-  bool sent = RFM.send(resp_en, sizeof(resp_en));
-
-  free(info);
-  free(resp_en);
-
-  return sent;
-}
-
-bool saveData() {
-  if (!df) {
-    return false;
-  }
-
-  df.println(data);
-  df.flush();
-  return true;
-}
-
-bool sendData(uint8_t offset) {
-  uint8_t S_packet[255];
-  uint8_t SP_len = sizeof(S_packet);
-
-  if (RFM.recv(S_packet, &SP_len)) {
-    char* m = process(2, (char*) S_packet, offset);
-    if (strstr(m, "[S->M]") != NULL) {
-      char* buffer = (char*) malloc(strlen(m-3));
-      memcpy(buffer, m, strlen(m-3));
-      buffer[strlen(buffer-1)] = ']';
-      char* packet = process(1, buffer, offset);
-      free(buffer);
-      RFM.send((uint8_t*) packet, sizeof(packet));
-      free(packet);
-    }
-    free(m);
-  }
-
-  char* message = process(1, data, offset);
-  bool sent = RFM.send((uint8_t*) message, len);
-  free(message);
-
-  return sent;
+  //! NOTE: this modifies the original string!
+  return data;
 }
 
 
@@ -291,6 +252,108 @@ uint8_t findPhase() {
   }
 
   phase = (diff > 0) ? 2 : 3;
+
+  //* Automatic Slave detachment
+#ifdef AUTOMATIC_DETACHMENT
+  if (phase == 3 && cv <= 700.0F) {
+    detach();
+  }
+#endif
+
   return phase;
+}
+
+
+void updateSensorData(uint32_t ID) {
+  memset(data, '-', 255);
+
+  BME_read();
+  GPS_read();
+  BNO_read();
+
+  float time = static_cast<float>((millis()-bootTime) / 1000.0F);
+  len = snprintf(data, 255, "Asterius:%li %.01f %.02f %.02f %.02f %.06f %.06f [%.02f,%.02f,%.02f] [%.02f,%.02f,%.02f] [%.02f,%.02f,%.02f,%.02f] [M]", ID, time, temp, pres, hum, lat, lon, mx, my, mz, gx, gy, gz, grr, gri, grj, grk);
+
+  Debug(data);
+}
+
+bool connect() {
+  uint8_t buffer[255];
+  uint8_t len = sizeof(buffer);
+
+  if (!RFM.recv(buffer, &len)) {
+    return false;
+  }
+
+  char* info = process(2, (char*) buffer, 1);
+  if (strstr(info, "[S->M]") == NULL) {
+    return false; //* got a message, wasn't ours :(
+  }
+
+  char resp[] = "Asterius:Pairing Success. Start transmitting data. [M->S]";
+  uint8_t* resp_en = (uint8_t*) process(1, resp, 1);
+  bool sent = RFM.send(resp_en, sizeof(resp_en));
+
+  return sent;
+}
+
+bool saveData() {
+  if (!df) {
+    return false;
+  }
+
+  df.println(data);
+  df.flush();
+  return true;
+}
+
+bool sendData(uint8_t offset) {
+  uint8_t S_packet[255];
+  uint8_t SP_len = sizeof(S_packet);
+
+  if (RFM.recv(S_packet, &SP_len)) {
+    char* m = process(2, (char*) S_packet, offset);
+    if (strstr(m, "[S->M]") != NULL) {
+      int end = (int) strlen(m);
+
+      m[end-4] = ']';
+      m[end-3] = '\0';
+
+      RFM.send((uint8_t*) m, sizeof(m));
+    }
+  }
+
+  char* packet = process(1, data, offset);
+  bool sent = RFM.send((uint8_t*) packet, sizeof(packet));
+
+  return sent;
+}
+
+void detach() {
+  if (detached) {
+    return;
+  }
+
+  Motor.write(90);
+  delay(1000);
+  yield();
+  Motor.write(0);
+  detached = true;
+}
+
+void listenForOrders() {
+  uint8_t message[255];
+  uint8_t len = sizeof(message);
+  if (!RFM.recv(message, &len)) {
+    return;
+  }
+
+  char* order = process(2, (char*) message, 1);
+  if (strstr(order, "[G->M]") != NULL) {
+    if (strstr(order, "DETACH") != NULL) {
+      detach();
+    }
+    //? more possible Ground Station orders here...
+  }
 }
 // ---------------------------- //
