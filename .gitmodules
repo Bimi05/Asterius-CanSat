@@ -22,3 +22,6 @@
 [submodule "lib/InternalTemperature"]
 	path = lib/InternalTemperature
 	url = https://github.com/LAtimes2/InternalTemperature
+[submodule "lib/TeensyThreads"]
+	path = lib/TeensyThreads
+	url = https://github.com/ftrias/TeensyThreads
