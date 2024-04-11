@@ -53,7 +53,7 @@ void loop() {
   //! sendData() on the other hand, will send both the Master's AND the Slaves' data.
 
   saveData();
-  sendData(1);
+  sendData();
 
   if (findPhase() == 4) {
     static uint32_t lastBeat = millis();
