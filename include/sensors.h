@@ -15,6 +15,6 @@ bool connect();
 void listenForOrders();
 
 bool saveData();
-bool sendData(uint8_t offset);
+bool sendData();
 
 uint8_t findPhase();

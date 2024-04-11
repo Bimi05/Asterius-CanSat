@@ -24,7 +24,6 @@ bool detached;
 
 char data[255];
 uint8_t len = 0;
-sh2_SensorValue_t BNO_val;
 
 uint8_t phase = 0;
 bool landed = false;
@@ -32,16 +31,14 @@ float lv = static_cast<float>(NAN);
 float gpres = 0.0F; //* for altitude calculation
 
 
-//? for easy copy (shift + alt + down/up arrow)
-//? please don't hate on me I'm lazy
-
-// float x = static_cast<float>(NAN);
 float temp = static_cast<float>(NAN);
 float pres = static_cast<float>(NAN);
 float hum = static_cast<float>(NAN);
 float lat = static_cast<float>(NAN);
 float lon = static_cast<float>(NAN);
 
+
+sh2_SensorValue_t BNO_val;
 
 float mx = static_cast<float>(NAN);
 float my = static_cast<float>(NAN);
@@ -55,7 +52,6 @@ float grr = static_cast<float>(NAN);
 float gri = static_cast<float>(NAN);
 float grj = static_cast<float>(NAN);
 float grk = static_cast<float>(NAN);
-
 // ---------------------------- //
 
 
@@ -104,7 +100,7 @@ bool GPS_init() {
   }
 
   GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCONLY);
-  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
+  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_2HZ);
 
   return true;
 }
@@ -307,12 +303,12 @@ bool saveData() {
   return true;
 }
 
-bool sendData(uint8_t offset) {
+bool sendData() {
   uint8_t S_packet[255];
   uint8_t SP_len = sizeof(S_packet);
 
   if (RFM.recv(S_packet, &SP_len)) {
-    char* m = process(2, (char*) S_packet, offset);
+    char* m = process(2, (char*) S_packet, 1);
     if (strstr(m, "[S->M]") != NULL) {
       int end = (int) strlen(m);
 
@@ -323,7 +319,7 @@ bool sendData(uint8_t offset) {
     }
   }
 
-  char* packet = process(1, data, offset);
+  char* packet = process(1, data, 1);
   bool sent = RFM.send((uint8_t*) packet, sizeof(packet));
 
   return sent;
