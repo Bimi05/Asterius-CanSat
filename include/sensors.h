@@ -13,6 +13,7 @@ void updateSensorData(uint32_t ID);
 
 bool connect();
 void listenForOrders();
+void receive();
 
 bool saveData();
 bool sendData();
