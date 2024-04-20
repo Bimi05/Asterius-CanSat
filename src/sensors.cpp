@@ -299,17 +299,18 @@ bool saveData() {
 
 void receive() {
   uint8_t S_packet[255];
-  uint8_t SP_len = sizeof(S_packet);
+  uint8_t S_len = sizeof(S_packet);
 
-  if (RFM.recv(S_packet, &SP_len)) {
-    char* m = process(2, (char*) S_packet, 1);
-    if (strstr(m, "[S->M]") != NULL) {
-      int end = (int) strlen(m);
+  if (RFM.recv(S_packet, &S_len)) {
+    char* S_data = process(2, (char*) S_packet, 1);
+    if (strstr(S_data, "[S->M]") != NULL) {
+      size_t end = strlen(S_data);
 
-      m[end-4] = ']';
-      m[end-3] = '\0';
+      S_data[end-4] = ']';
+      S_data[end-3] = '\0';
 
-      RFM.send((uint8_t*) m, sizeof(m));
+      uint8_t* packet = (uint8_t*) process(1, S_data, 1);
+      RFM.send(packet, sizeof(packet));
     }
   }
 }
