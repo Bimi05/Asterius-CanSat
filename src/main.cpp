@@ -36,13 +36,15 @@ void setup() {
     return;
   }
 
+  threads.addThread(listenForOrders);
+  threads.addThread(receive);
+
   Serial.println("Ready!");
 }
 
 uint32_t p_id = 1;
 void loop() {
   updateSensorData(p_id);
-  listenForOrders();
 
   float temp = InternalTemperature.readTemperatureC();
   Serial.print("[Debug] Teensy's internal temperature: ");
