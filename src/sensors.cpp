@@ -40,18 +40,8 @@ float lon = static_cast<float>(NAN);
 
 sh2_SensorValue_t BNO_val;
 
-float mx = static_cast<float>(NAN);
-float my = static_cast<float>(NAN);
-float mz = static_cast<float>(NAN);
-
-float gx = static_cast<float>(NAN);
-float gy = static_cast<float>(NAN);
-float gz = static_cast<float>(NAN);
-
-float grr = static_cast<float>(NAN);
-float gri = static_cast<float>(NAN);
-float grj = static_cast<float>(NAN);
-float grk = static_cast<float>(NAN);
+float mag = static_cast<float>(NAN);
+float grav = static_cast<float>(NAN);
 // ---------------------------- //
 
 
@@ -78,7 +68,6 @@ bool BNO_init() {
 
   BNO085.enableReport(SH2_MAGNETIC_FIELD_CALIBRATED);
   BNO085.enableReport(SH2_GRAVITY);
-  BNO085.enableReport(SH2_GEOMAGNETIC_ROTATION_VECTOR);
 
   return true;
 }
@@ -144,13 +133,13 @@ void BME_read() {
 }
 
 void GPS_read() {
-  //! people will say this is dangerous, but I'm taking the risk
-  while (true) {
+  while (!GPS.newNMEAreceived()) {
     GPS.read();
-    if (GPS.newNMEAreceived() && GPS.parse(GPS.lastNMEA())) {
-      break;
-    }
     yield();
+  }
+
+  if (!GPS.parse(GPS.lastNMEA())) {
+    return;
   }
 
   //* this just processes our coordinates
@@ -176,18 +165,15 @@ void BNO_read() {
   if (BNO085.getSensorEvent(&BNO_val)) {
     switch (BNO_val.sensorId) {
       case SH2_MAGNETIC_FIELD_CALIBRATED:
-        mx = BNO_val.un.magneticField.x;
-        my = BNO_val.un.magneticField.y;
-        mz = BNO_val.un.magneticField.z;
+        float mag_x = powf(BNO_val.un.magneticField.x, 2.0F);
+        float mag_y = powf(BNO_val.un.magneticField.y, 2.0F);
+        float mag_z = powf(BNO_val.un.magneticField.z, 2.0F);
+        mag = sqrtf(mag_x + mag_y + mag_z); //* measurement unit: μT
       case SH2_GRAVITY:
-        gx = BNO_val.un.gravity.x;
-        gy = BNO_val.un.gravity.y;
-        gz = BNO_val.un.gravity.z;
-      case SH2_GEOMAGNETIC_ROTATION_VECTOR:
-        grr = BNO_val.un.geoMagRotationVector.real;
-        gri = BNO_val.un.geoMagRotationVector.i;
-        grj = BNO_val.un.geoMagRotationVector.j;
-        grk = BNO_val.un.geoMagRotationVector.k;
+        float grav_x = powf(BNO_val.un.gravity.x, 2.0F);
+        float grav_y = powf(BNO_val.un.gravity.y, 2.0F);
+        float grav_z = powf(BNO_val.un.gravity.z, 2.0F);
+        grav = sqrtf(grav_z + grav_y + grav_z); //* measurement unit: m/s^2
     }
   }
 }
@@ -260,15 +246,23 @@ uint8_t findPhase() {
 }
 
 
+//* Here's a demonstration of how the data is distributed on a packet!
+//* NOTE: measurement units are not included in the packet
+
+/*
+| Team Name | ID |  Time  | Temperature |   Pressure   | Humidity |   Latitude   |   Longitude   | Magnetic Field Intensity | Gravitational Field Intensity |
+| Asterius: | 31 | 31.0 s |   26.79°C   |  999.70 hPa  |  45.09%  | 37.96683774N | 23.730371654E |        25.675 μT         |          9.985 m/s^2          |
+*/
+
 void updateSensorData(uint32_t ID) {
   memset(data, '-', 255);
 
   BME_read();
-  GPS_read();
   BNO_read();
+  GPS_read();
 
   float time = static_cast<float>((millis()-bootTime) / 1000.0F);
-  len = snprintf(data, 255, "Asterius:%li %.01f %.02f %.02f %.02f %.06f %.06f [%.02f,%.02f,%.02f] [%.02f,%.02f,%.02f] [%.02f,%.02f,%.02f,%.02f] [M]", ID, time, temp, pres, hum, lat, lon, mx, my, mz, gx, gy, gz, grr, gri, grj, grk);
+  len = snprintf(data, 255, "Asterius:%li %.01f %.02f %.02f %.02f %.06f %.06f %.03f %.03f [M]", ID, time, temp, pres, hum, lat, lon, mag, grav);
 
   Debug(data);
 }
@@ -303,7 +297,7 @@ bool saveData() {
   return true;
 }
 
-bool sendData() {
+void receive() {
   uint8_t S_packet[255];
   uint8_t SP_len = sizeof(S_packet);
 
@@ -318,7 +312,9 @@ bool sendData() {
       RFM.send((uint8_t*) m, sizeof(m));
     }
   }
+}
 
+bool sendData() {
   char* packet = process(1, data, 1);
   bool sent = RFM.send((uint8_t*) packet, sizeof(packet));
 
@@ -330,10 +326,10 @@ void detach() {
     return;
   }
 
-  Motor.write(90);
+  Motor.write(50);
   delay(1000);
   yield();
-  Motor.write(0);
+  Motor.detach();
   detached = true;
 }
 
