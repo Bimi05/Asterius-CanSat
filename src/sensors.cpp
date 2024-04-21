@@ -89,7 +89,7 @@ bool GPS_init() {
   }
 
   GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCONLY);
-  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_2HZ);
+  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
 
   return true;
 }
@@ -165,15 +165,19 @@ void BNO_read() {
   if (BNO085.getSensorEvent(&BNO_val)) {
     switch (BNO_val.sensorId) {
       case SH2_MAGNETIC_FIELD_CALIBRATED:
-        float mag_x = powf(BNO_val.un.magneticField.x, 2.0F);
-        float mag_y = powf(BNO_val.un.magneticField.y, 2.0F);
-        float mag_z = powf(BNO_val.un.magneticField.z, 2.0F);
-        mag = sqrtf(mag_x + mag_y + mag_z); //* measurement unit: μT
+        {
+          float mag_x = powf(BNO_val.un.magneticField.x, 2.0F);
+          float mag_y = powf(BNO_val.un.magneticField.y, 2.0F);
+          float mag_z = powf(BNO_val.un.magneticField.z, 2.0F);
+          mag = sqrtf(mag_x + mag_y + mag_z); //* measurement unit: μT
+        }
       case SH2_GRAVITY:
-        float grav_x = powf(BNO_val.un.gravity.x, 2.0F);
-        float grav_y = powf(BNO_val.un.gravity.y, 2.0F);
-        float grav_z = powf(BNO_val.un.gravity.z, 2.0F);
-        grav = sqrtf(grav_z + grav_y + grav_z); //* measurement unit: m/s^2
+        {
+          float grav_x = powf(BNO_val.un.gravity.x, 2.0F);
+          float grav_y = powf(BNO_val.un.gravity.y, 2.0F);
+          float grav_z = powf(BNO_val.un.gravity.z, 2.0F);
+          grav = sqrtf(grav_x + grav_y + grav_z); //* measurement unit: m/s^2
+        }
     }
   }
 }
@@ -264,7 +268,7 @@ void updateSensorData(uint32_t ID) {
   float time = static_cast<float>((millis()-bootTime) / 1000.0F);
   len = snprintf(data, 255, "Asterius:%li %.01f %.02f %.02f %.02f %.06f %.06f %.03f %.03f [M]", ID, time, temp, pres, hum, lat, lon, mag, grav);
 
-  Debug(data);
+  Debug(process(1, data, 1));
 }
 
 bool connect() {
