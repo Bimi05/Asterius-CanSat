@@ -100,14 +100,12 @@ bool SD_init() {
     return false;
   }
 
-  if (SD.exists("ASTERIUS_DATA.txt")) {
-    SD.remove("ASTERIUS_DATA.txt");
+  if (SD.exists("ASTERIUS.TXT")) {
+    SD.remove("ASTERIUS.TXT");
   }
 
-  df = SD.open("ASTERIUS_DATA.txt");
-  df.seek(0); //! this might cause an issue (if it doesn't overwrite ALL the content, i.e. in a Ctrl+C)
-
-  return true;
+  df = SD.open("ASTERIUS.TXT", FILE_WRITE);
+  return df;
 }
 
 // ---------------------------- //
@@ -268,7 +266,7 @@ void updateSensorData(uint32_t ID) {
   float time = static_cast<float>((millis()-bootTime) / 1000.0F);
   len = snprintf(data, 255, "Asterius:%li %.01f %.02f %.02f %.02f %.06f %.06f %.03f %.03f [M]", ID, time, temp, pres, hum, lat, lon, mag, grav);
 
-  Debug(process(1, data, 1));
+  Debug(data);
 }
 
 bool connect() {
