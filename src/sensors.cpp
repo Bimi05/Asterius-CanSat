@@ -125,10 +125,6 @@ bool SD_init() {
     return false;
   }
 
-  if (SD.exists("ASTERIUS.TXT")) {
-    SD.remove("ASTERIUS.TXT");
-  }
-
   df = SD.open("ASTERIUS.TXT", FILE_WRITE);
 
   uint16_t f = (df) ? SUCCESS_FREQ : FAIL_FREQ;
