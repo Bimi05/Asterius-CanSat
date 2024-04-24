@@ -5,8 +5,6 @@
 #include <SD.h>
 #include <Servo.h>
 
-#define DEBUG //! comment out when not debugging (removes debug/info messages).
-
 
 bool initialiseSensors();
 void updateSensorData(uint32_t ID);

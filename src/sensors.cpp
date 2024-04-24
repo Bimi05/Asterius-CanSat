@@ -1,8 +1,15 @@
 #include "sensors.h"
 #include "misc.h"
 
-#define SD_SPI_ADDR 5
-#define SERVO_PIN 0
+#define AUTOMATIC_DETACHMENT
+
+#define SD_CHIP_SELECT 5
+#define SERVO_PIN 3
+
+#define BUZZER_PIN 4
+#define FAIL_FREQ 250
+#define SUCCESS_FREQ 3000
+#define BEEP_DURATION 500
 
 #define RFM_CHIP_SELECT 23
 #define RFM_INTERRUPT 22
@@ -48,7 +55,8 @@ float grav = static_cast<float>(NAN);
 // ------ Initialisation ------ //
 bool BME_init() {
   if (!BME688.begin()) {
-    Debug("Unable to initialise the BME688 sensor.");
+    tone(BUZZER_PIN, FAIL_FREQ, BEEP_DURATION);
+    delay(BEEP_DURATION*2);
     return false;
   }
 
@@ -57,46 +65,63 @@ bool BME_init() {
   }
   gpres /= 10;
 
+  tone(BUZZER_PIN, SUCCESS_FREQ, BEEP_DURATION);
+  delay(BEEP_DURATION*2);
+
   return true;
 }
 
 bool BNO_init() {
   if (!BNO085.begin_I2C()) {
-    Debug("Unable to initialise the BNO085 sensor.");
+    tone(BUZZER_PIN, FAIL_FREQ, BEEP_DURATION);
+    delay(BEEP_DURATION*2);
     return false;
   }
 
   BNO085.enableReport(SH2_MAGNETIC_FIELD_CALIBRATED);
   BNO085.enableReport(SH2_GRAVITY);
 
+  tone(BUZZER_PIN, SUCCESS_FREQ, BEEP_DURATION);
+  delay(BEEP_DURATION*2);
+
   return true;
 }
 
 bool RFM_init() {
   if (!RFM.init()) {
-    Debug("Unable to initialise the RFM transmitter.");
+    tone(BUZZER_PIN, FAIL_FREQ, BEEP_DURATION);
+    delay(BEEP_DURATION*2);
     return false;
   }
 
   RFM.setFrequency(RFM_FREQUENCY);
+
+  tone(BUZZER_PIN, SUCCESS_FREQ, BEEP_DURATION);
+  delay(BEEP_DURATION*2);
+
   return true;
 }
 
 bool GPS_init() {
   if (!GPS.begin(9600)) {
-    Debug("Unable to initialise the GPS.");
+    tone(BUZZER_PIN, FAIL_FREQ, BEEP_DURATION);
+    delay(BEEP_DURATION*2);
     return false;
   }
 
   GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCONLY);
   GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
 
+  tone(BUZZER_PIN, SUCCESS_FREQ, BEEP_DURATION);
+  delay(BEEP_DURATION*2);
+
   return true;
 }
 
 bool SD_init() {
-  if (!SD.begin(SD_SPI_ADDR)) { 
-    Debug("Unable to initialise the SD card.");
+  if (!SD.begin(SD_CHIP_SELECT)) {
+    tone(BUZZER_PIN, FAIL_FREQ, BEEP_DURATION);
+    delay(BEEP_DURATION*2);
     return false;
   }
 
@@ -105,17 +130,31 @@ bool SD_init() {
   }
 
   df = SD.open("ASTERIUS.TXT", FILE_WRITE);
+
+  uint16_t f = (df) ? SUCCESS_FREQ : FAIL_FREQ;
+  tone(BUZZER_PIN, f, BEEP_DURATION);
+  delay(BEEP_DURATION*2);
+
   return df;
 }
 
 // ---------------------------- //
 bool initialiseSensors() {
   Motor.attach(SERVO_PIN);
+  Motor.write(120); //? needs verification
+  delay(1000);
+
   if (!(BME_init() && BNO_init() && GPS_init() && SD_init() && RFM_init() && Motor.attached())) {
+    tone(BUZZER_PIN, FAIL_FREQ, BEEP_DURATION*2);
+    delay(BEEP_DURATION*4);
     return false;
   }
 
   bootTime = millis();
+
+  tone(BUZZER_PIN, SUCCESS_FREQ, BEEP_DURATION*2);
+  delay(BEEP_DURATION*4);
+
   return true;
 }
 // ---------------------------- //
@@ -257,32 +296,32 @@ uint8_t findPhase() {
 */
 
 void updateSensorData(uint32_t ID) {
-  memset(data, '-', 255);
-
   BME_read();
   BNO_read();
   GPS_read();
 
-  float time = static_cast<float>((millis()-bootTime) / 1000.0F);
+  float time = (float) ((millis()-bootTime) / 1000.0F);
   len = snprintf(data, 255, "Asterius:%li %.01f %.02f %.02f %.02f %.06f %.06f %.03f %.03f [M]", ID, time, temp, pres, hum, lat, lon, mag, grav);
-
-  Debug(data);
 }
 
 bool connect() {
   uint8_t buffer[255];
   uint8_t len = sizeof(buffer);
+  
+  if (!RFM.waitAvailableTimeout((5)*60*1000)) {
+    return false;
+  }
 
   if (!RFM.recv(buffer, &len)) {
     return false;
   }
 
   char* info = process(2, (char*) buffer, 1);
-  if (strstr(info, "[S->M]") == NULL) {
-    return false; //* got a message, wasn't ours :(
+  if (strstr(info, "[S->M]") == NULL || strstr(info, "Pairing requested") == NULL) {
+    return false;
   }
 
-  char resp[] = "Asterius:Pairing Success. Start transmitting data. [M->S]";
+  char resp[] = "Asterius:Pairing success. Start transmitting data. [M->S]";
   uint8_t* resp_en = (uint8_t*) process(1, resp, 1);
   bool sent = RFM.send(resp_en, sizeof(resp_en));
 
@@ -303,24 +342,30 @@ void receive() {
   uint8_t S_packet[255];
   uint8_t S_len = sizeof(S_packet);
 
-  if (RFM.recv(S_packet, &S_len)) {
-    char* S_data = process(2, (char*) S_packet, 1);
-    if (strstr(S_data, "[S->M]") != NULL) {
-      size_t end = strlen(S_data);
-
-      S_data[end-4] = ']';
-      S_data[end-3] = '\0';
-
-      uint8_t* packet = (uint8_t*) process(1, S_data, 1);
-      RFM.send(packet, sizeof(packet));
-    }
+  if (!RFM.waitAvailableTimeout(300)) {
+    return;
   }
+
+  if (!RFM.recv(S_packet, &S_len)) {
+    return;
+  }
+
+  if (strstr((char*) S_packet, "[S->M]") == NULL) {
+    return;
+  }
+
+  size_t end = strlen((char*) S_packet);
+
+  S_packet[end-4] = ']';
+  S_packet[end-3] = '\0';
+
+  RFM.send(S_packet, len);
 }
 
 bool sendData() {
   char* packet = process(1, data, 1);
-  bool sent = RFM.send((uint8_t*) packet, sizeof(packet));
-
+  bool sent = RFM.send((uint8_t*) packet, len);
+  RFM.waitPacketSent();
   return sent;
 }
 
@@ -329,9 +374,8 @@ void detach() {
     return;
   }
 
-  Motor.write(50);
+  Motor.write(50); //? needs verification
   delay(1000);
-  yield();
   Motor.detach();
   detached = true;
 }
@@ -339,6 +383,11 @@ void detach() {
 void listenForOrders() {
   uint8_t message[255];
   uint8_t len = sizeof(message);
+
+  if (!RFM.waitAvailableTimeout((1)*60*1000)) {
+    return;
+  }
+
   if (!RFM.recv(message, &len)) {
     return;
   }

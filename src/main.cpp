@@ -5,51 +5,38 @@
 #include "sensors.h"
 
 #define BUZZER 4
+#define FAIL_FREQ 250
+#define SUCCESS_FREQ 3000
+#define BEEP_DURATION 500
 
 void setup() {
   Serial.begin(115200);
-
-  if (!initialiseSensors()) {
-    Serial.println("Something went wrong with the initialisation. Check wirings and addresses.");
-    return;
-  }
-
-  Serial.println("Sensors initialised. Beginning slave pairing...");
+  initialiseSensors();
 
   uint32_t start = millis();
   uint8_t cons = 0;
 
-  while (true) {
-    //* realistically, connecting is just telling us that Master and Slave(s) can communicate
+  while ((millis() - start) < (5)*60*1000) { //* 5 minutes should be plenty
     if (connect()) {
       cons++;
-      Serial.println("Slave found! Connection established.");
-    }
-
-    if (millis()-start >= 5*60*1000) { //* 5 minutes should be plenty
-      break;
+      tone(BUZZER, SUCCESS_FREQ, BEEP_DURATION);
     }
   }
 
   if (cons == 0) {
-    Serial.println("No connections have been made. Please ensure the Master and the Slaves are functional.");
-    return;
+    tone(BUZZER, FAIL_FREQ, BEEP_DURATION);
   }
 
   threads.addThread(listenForOrders);
   threads.addThread(receive);
 
-  Serial.println("Ready!");
+  tone(BUZZER, SUCCESS_FREQ, BEEP_DURATION*2);
+  delay(BEEP_DURATION*4);
 }
 
 uint32_t p_id = 1;
 void loop() {
   updateSensorData(p_id);
-
-  float temp = InternalTemperature.readTemperatureC();
-  Serial.print("[Debug] Teensy's internal temperature: ");
-  Serial.print(temp, 1);
-  Serial.println("°C");
 
   //! NOTE: saveData() will save ONLY the Master's data to the SD card.
   //! sendData() on the other hand, will send both the Master's AND the Slaves' data.
@@ -61,7 +48,7 @@ void loop() {
     static uint32_t lastBeat = millis();
     if (millis() - lastBeat >= 2000) {
       lastBeat = millis();
-      tone(BUZZER, 3000, 500);
+      tone(BUZZER, 4000, (3/2)*BEEP_DURATION); //* 4000 Hz is pretty sharp and easy to hear
     }
   }
 
