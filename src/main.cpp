@@ -16,10 +16,11 @@ void setup() {
   uint32_t start = millis();
   uint8_t cons = 0;
 
-  while ((millis() - start) < (5)*60*1000) { //* 5 minutes should be plenty
+  while ((millis() - start) < (2)*60*1000) { //* 2 minutes should be plenty
     if (connect()) {
       cons++;
       tone(BUZZER, SUCCESS_FREQ, BEEP_DURATION);
+      break; //* remove when more than 1 Slaves
     }
   }
 

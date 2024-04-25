@@ -125,32 +125,23 @@ bool SD_init() {
     return false;
   }
 
-  df = SD.open("ASTERIUS.TXT", FILE_WRITE);
-
-  uint16_t f = (df) ? SUCCESS_FREQ : FAIL_FREQ;
-  tone(BUZZER_PIN, f, BEEP_DURATION);
+  tone(BUZZER_PIN, SUCCESS_FREQ, BEEP_DURATION);
   delay(BEEP_DURATION*2);
 
-  return df;
+  return true;
 }
 
 // ---------------------------- //
 bool initialiseSensors() {
   Motor.attach(SERVO_PIN);
-  Motor.write(120); //? needs verification
+  Motor.write(137);
   delay(1000);
 
-  if (!(BME_init() && BNO_init() && GPS_init() && SD_init() && RFM_init() && Motor.attached())) {
-    tone(BUZZER_PIN, FAIL_FREQ, BEEP_DURATION*2);
-    delay(BEEP_DURATION*4);
+  if (!(BME_init() && BNO_init() && GPS_init() && SD_init() && RFM_init())) {
     return false;
   }
 
   bootTime = millis();
-
-  tone(BUZZER_PIN, SUCCESS_FREQ, BEEP_DURATION*2);
-  delay(BEEP_DURATION*4);
-
   return true;
 }
 // ---------------------------- //
@@ -246,6 +237,16 @@ char* process(uint8_t mode, char* data, uint8_t offset) {
   return data;
 }
 
+void detach() {
+  if (detached) {
+    return;
+  }
+
+  Motor.write(68);
+  delay(1000);
+  detached = true;
+  Motor.detach();
+}
 
 uint8_t findPhase() {
   if (isnan(lv)) {
@@ -274,7 +275,7 @@ uint8_t findPhase() {
 
   //* Automatic Slave detachment
 #ifdef AUTOMATIC_DETACHMENT
-  if (phase == 3 && cv <= 700.0F) {
+  if (phase == 3 && cv <= 200.0F) {
     detach();
   }
 #endif
@@ -304,7 +305,7 @@ bool connect() {
   uint8_t buffer[255];
   uint8_t len = sizeof(buffer);
   
-  if (!RFM.waitAvailableTimeout((5)*60*1000)) {
+  if (!RFM.waitAvailableTimeout((2)*60*1000)) {
     return false;
   }
 
@@ -325,12 +326,15 @@ bool connect() {
 }
 
 bool saveData() {
+  df = SD.open("ASTERIUS.TXT", FILE_WRITE);
   if (!df) {
     return false;
   }
 
   df.println(data);
   df.flush();
+  df.close();
+
   return true;
 }
 
@@ -363,17 +367,6 @@ bool sendData() {
   bool sent = RFM.send((uint8_t*) packet, len);
   RFM.waitPacketSent();
   return sent;
-}
-
-void detach() {
-  if (detached) {
-    return;
-  }
-
-  Motor.write(50); //? needs verification
-  delay(1000);
-  Motor.detach();
-  detached = true;
 }
 
 void listenForOrders() {
