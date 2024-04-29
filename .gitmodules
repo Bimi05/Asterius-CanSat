@@ -19,9 +19,3 @@
 [submodule "lib/SD"]
 	path = lib/SD
 	url = https://github.com/arduino-libraries/SD
-[submodule "lib/InternalTemperature"]
-	path = lib/InternalTemperature
-	url = https://github.com/LAtimes2/InternalTemperature
-[submodule "lib/TeensyThreads"]
-	path = lib/TeensyThreads
-	url = https://github.com/ftrias/TeensyThreads
